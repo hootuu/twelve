@@ -6,13 +6,19 @@ replace github.com/hootuu/utils => ../utils
 
 replace github.com/hootuu/tome => ../tome
 
+replace github.com/hootuu/cang => ../cang
+
 require (
+	github.com/hootuu/cang v0.0.0-20231107023825-53cfc167031b
 	github.com/hootuu/tome v1.0.2
 	github.com/hootuu/utils v1.0.2
+	github.com/rs/xid v1.5.0
+	go.uber.org/zap v1.26.0
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
 )
 
 require (
+	github.com/boltdb/bolt v1.3.1 // indirect
 	github.com/ethereum/go-ethereum v1.13.3 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/gookit/color v1.5.4 // indirect
@@ -35,8 +41,9 @@ require (
 	github.com/multiformats/go-varint v0.0.7 // indirect
 	github.com/pelletier/go-toml/v2 v2.1.0 // indirect
 	github.com/polydawn/refmt v0.89.0 // indirect
-	github.com/rs/xid v1.5.0 // indirect
+	github.com/sagikazarmark/locafero v0.3.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
+	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/afero v1.10.0 // indirect
 	github.com/spf13/cast v1.5.1 // indirect
@@ -48,7 +55,6 @@ require (
 	github.com/whyrusleeping/cbor-gen v0.0.0-20230923211252-36a87e1ba72f // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/crypto v0.14.0 // indirect
 	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/text v0.13.0 // indirect

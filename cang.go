@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/hootuu/cang"
 	"github.com/hootuu/utils/errors"
+	"github.com/hootuu/utils/sys"
 	"hash/crc32"
 )
 
@@ -23,11 +24,11 @@ func NewTxCang(name string, path string) (*TxCang, *errors.Error) {
 		return nil, err
 	}
 	for i := 0; i < TxCangCount; i++ {
-		txCang.qColl[i], err = txCang.cang.Collection(fmt.Sprintf("Q_%s_%d", name, i+1))
+		txCang.qColl[i], err = txCang.cang.Collection(fmt.Sprintf("Q_%s_%d", name, i))
 		if err != nil {
 			return nil, err
 		}
-		txCang.cColl[i], err = txCang.cang.Collection(fmt.Sprintf("C_%s_%d", name, i+1))
+		txCang.cColl[i], err = txCang.cang.Collection(fmt.Sprintf("C_%s_%d", name, i))
 		if err != nil {
 			return nil, err
 		}
@@ -39,6 +40,7 @@ func NewTxCang(name string, path string) (*TxCang, *errors.Error) {
 func (tc *TxCang) QCollection(hash string) *cang.Collection {
 	hashInt := crc32.ChecksumIEEE([]byte(hash))
 	idx := int(hashInt) % TxCangCount
+	sys.Info("QCollection ", hash, " ", idx)
 	return tc.qColl[idx]
 }
 
@@ -46,5 +48,6 @@ func (tc *TxCang) QCollection(hash string) *cang.Collection {
 func (tc *TxCang) CCollection(hash string) *cang.Collection {
 	hashInt := crc32.ChecksumIEEE([]byte(hash))
 	idx := int(hashInt) % TxCangCount
+	sys.Info("CCollection ", hash, " ", idx)
 	return tc.cColl[idx]
 }

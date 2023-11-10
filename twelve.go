@@ -140,7 +140,10 @@ func (tw *Twelve) doCommit(hash string) *errors.Error {
 	go expect.Waiting(func() *errors.Error {
 		return tw.notifier.Notify(committedMsg)
 	}, func() {
-		tw.doConfirm(tx.Hash)
+		err := tw.doConfirm(tx.Hash)
+		if err != nil {
+			gLogger.Error("doConfirm failed", zap.String("tx", tx.Hash), zap.Error(err))
+		}
 	})
 	return nil
 }

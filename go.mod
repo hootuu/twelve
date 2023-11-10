@@ -19,6 +19,8 @@ require (
 
 require (
 	github.com/boltdb/bolt v1.3.1 // indirect
+	github.com/btcsuite/btcd/btcec/v2 v2.2.0 // indirect
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/ethereum/go-ethereum v1.13.3 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/gookit/color v1.5.4 // indirect

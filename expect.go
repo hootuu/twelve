@@ -7,6 +7,7 @@ import (
 	"github.com/hootuu/utils/sys"
 	"go.uber.org/zap"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -28,9 +29,10 @@ const (
 
 type Expect struct {
 	ID        string `json:"id"`
-	Expect    int    `json:"expect"`
-	wg        sync.WaitGroup
-	done      chan struct{}
+	Expect    uint32 `json:"expect"`
+	waitGroup chan struct{}
+	counter   uint32
+	done      chan ExpectState
 	state     ExpectState
 	timestamp time.Time
 	replier   map[string]struct{}
@@ -43,13 +45,14 @@ func ExpectID(peerID string, hash string, forType Type) string {
 
 func NewExpect(id string, expect int) *Expect {
 	e := &Expect{
-		ID:      id,
-		Expect:  expect,
-		replier: make(map[string]struct{}),
-		done:    make(chan struct{}),
-		state:   ExpectInit,
+		ID:        id,
+		Expect:    uint32(expect),
+		waitGroup: make(chan struct{}, 12*uint32(expect)),
+		counter:   0,
+		replier:   make(map[string]struct{}),
+		done:      make(chan ExpectState),
+		state:     ExpectInit,
 	}
-	e.wg.Add(e.Expect)
 	return e
 }
 
@@ -75,17 +78,38 @@ func (e *Expect) SetState(s ExpectState) {
 func (e *Expect) Waiting(doFunc func() *errors.Error, onFunc func()) bool {
 	if sys.RunMode.IsRd() {
 		logger.Logger.Info("waiting for: ", zap.String("id", e.ID),
-			zap.Int("expect", e.Expect))
+			zap.Uint32("expect", e.Expect))
 	}
 	go func() {
 		e.SetState(ExpectWaiting)
-		e.wg.Wait()
-		e.done <- struct{}{}
-		close(e.done)
-		if sys.RunMode.IsRd() {
-			logger.Logger.Info("done waiting for: ", zap.String("id", e.ID),
-				zap.Int("expect", e.Expect))
+		var newCounter = e.counter
+		for {
+			if sys.RunMode.IsRd() {
+				logger.Logger.Info("continue waiting for: ", zap.String("id", e.ID),
+					zap.Uint32("expect", e.Expect), zap.Uint32("counter", newCounter))
+			}
+			end := false
+			select {
+			case <-e.waitGroup:
+				newCounter = atomic.AddUint32(&e.counter, 1)
+				if sys.RunMode.IsRd() {
+					logger.Logger.Info("done waiting for[get reply]: ", zap.String("id", e.ID),
+						zap.Uint32("expect", e.Expect), zap.Uint32("counter", newCounter))
+				}
+			case result := <-e.done:
+				end = true
+				e.done <- result
+				break
+			}
+			if end {
+				break
+			}
 		}
+		if newCounter >= e.Expect {
+			e.done <- ExpectFinished
+			close(e.done)
+		}
+
 	}()
 	err := doFunc()
 	if err != nil {
@@ -95,11 +119,23 @@ func (e *Expect) Waiting(doFunc func() *errors.Error, onFunc func()) bool {
 		e.doCancel()
 	}
 	select {
-	case <-e.done:
-		onFunc()
-		e.SetState(ExpectFinished)
-		return true
+	case result := <-e.done:
+		success := true
+		switch result {
+		case ExpectFinished:
+			onFunc()
+			e.SetState(ExpectFinished)
+			success = true
+		case ExpectCanceled:
+			e.SetState(ExpectCanceled)
+			success = false
+		case ExpectTimeout:
+			e.SetState(ExpectTimeout)
+			success = false
+		}
+		return success
 	case <-time.After(DefaultExpectTimeout):
+		e.done <- ExpectTimeout
 		e.SetState(ExpectTimeout)
 		return false
 	}
@@ -119,17 +155,11 @@ func (e *Expect) Reply(peerID string) {
 		return
 	}
 	e.replier[peerID] = struct{}{}
-	if len(e.replier) > e.Expect {
-		return
-	}
-	e.wg.Done()
+	e.waitGroup <- struct{}{}
 }
 
 func (e *Expect) doCancel() {
-	for i := 0; i < e.Expect; i++ {
-		e.wg.Done()
-	}
-	e.SetState(ExpectCanceled)
+	e.done <- ExpectCanceled
 }
 
 type ExpectFactory struct {

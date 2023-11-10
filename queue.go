@@ -88,16 +88,12 @@ func (q *Queue) Confirm(hash string) (*ImmutableTx, *errors.Error) {
 		return nil, err
 	}
 	tx.Confirm()
-	err = q.txCang.CCollection(tx.Hash).Put(tx.Hash, tx)
+	err = q.txCang.QCollection(tx.Hash).Put(tx.Hash, tx)
 	if err != nil {
 		return nil, err
 	}
 	immutableTx := tx.Immutable()
 	sys.Info("confirm tx ", immutableTx.Hash, " pre: ", immutableTx.Pre)
-	err = q.txCang.CCollection(immutableTx.Hash).Put(immutableTx.Hash, immutableTx)
-	if err != nil {
-		return nil, err
-	}
 	err = q.txCang.CCollection(immutableTx.Hash).Put(immutableTx.Hash, immutableTx)
 	if err != nil {
 		return nil, err

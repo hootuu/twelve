@@ -182,10 +182,10 @@ func (tw *Twelve) doConfirm(hash string) *errors.Error {
 }
 
 func (tw *Twelve) doOnMessage(msg *Message) {
-	if sys.RunMode.IsRd() {
-		gLogger.Info("twelve.on.message", zap.String("id", msg.ID),
-			zap.Int("type", int(msg.Type)))
-	}
+	//if sys.RunMode.IsRd() {
+	//	gLogger.Info("twelve.on.message", zap.String("id", msg.ID),
+	//		zap.Int("type", int(msg.Type)))
+	//}
 	replyPayload, err := msg.GetReplyPayload()
 	if err != nil {
 		gLogger.Error("doOnMessage: msg is invalid",
@@ -203,7 +203,7 @@ func (tw *Twelve) doOnMessage(msg *Message) {
 		gLogger.Error("no such expect[PrepareMessage]", zap.String("hash", hash))
 		return
 	}
-	expect.Reply(msg.Peer.ID)
+	go expect.Reply(msg.Peer.ID)
 }
 
 func (tw *Twelve) OnPrepare(msg *Message) {

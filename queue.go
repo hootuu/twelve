@@ -4,6 +4,7 @@ import (
 	"github.com/hootuu/utils/errors"
 	"github.com/hootuu/utils/sys"
 	"github.com/hootuu/utils/types/pagination"
+	"go.uber.org/zap"
 	"sync"
 )
 
@@ -93,6 +94,7 @@ func (q *Queue) Confirm(hash string) (*ImmutableTx, *errors.Error) {
 		return nil, err
 	}
 	immutableTx := tx.Immutable()
+	gLogger.Info("confirm_tx", zap.String("hash", immutableTx.Hash), zap.String(" pre: ", immutableTx.Pre))
 	sys.Info("confirm tx ", immutableTx.Hash, " pre: ", immutableTx.Pre)
 	err = q.txCang.CCollection(immutableTx.Hash).Put(immutableTx.Hash, immutableTx)
 	if err != nil {

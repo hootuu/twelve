@@ -3,7 +3,6 @@ package twelve
 import (
 	"github.com/hootuu/tome/pr"
 	"github.com/hootuu/utils/errors"
-	"github.com/hootuu/utils/sys"
 	"go.uber.org/zap"
 )
 
@@ -41,11 +40,14 @@ func (m *MemTwelveNode) Notify(msg *Message) *errors.Error {
 	if len(m.bus.listeners) == 0 {
 		return nil
 	}
-	if sys.RunMode.IsRd() {
-		gLogger.Info("notify msg: ", zap.Any("msg", msg))
-	}
+	//if sys.RunMode.IsRd() {
+	//	gLogger.Info("notify msg: ", zap.Any("msg", msg))
+	//}
 	for _, listener := range m.bus.listeners {
-		_ = listener.On(msg)
+		err := listener.On(msg)
+		if err != nil {
+			gLogger.Error("listener.On(msg) failed", zap.Error(err), zap.Any("msg", msg))
+		}
 	}
 	return nil
 }

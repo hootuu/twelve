@@ -6,7 +6,6 @@ import (
 	"github.com/hootuu/tome/pr"
 	"github.com/hootuu/twelve"
 	"github.com/hootuu/utils/logger"
-	"github.com/hootuu/utils/types/pagination"
 	"go.uber.org/zap"
 	"time"
 )
@@ -54,6 +53,7 @@ func main() {
 
 	var wNodes []twelve.ITwelveNode
 	wNodes = append(wNodes, readNode)
+	//var oneWTW *twelve.Twelve
 	for i := 0; i < ttfields.peers; i++ {
 		fmt.Println("NEW TWELVE NODe:", i)
 		node := twelve.NewMemTwelveNode(bus, &pr.Local{
@@ -71,6 +71,7 @@ func main() {
 			return
 		}
 		tw.Start()
+		//oneWTW = tw
 	}
 
 	fmt.Println("END: ALL W NODE.Start()")
@@ -93,48 +94,61 @@ func main() {
 				fmt.Println(err)
 				return
 			}
-			time.Sleep(800 * time.Millisecond)
+			time.Sleep(1 * time.Second)
 		}
 
 	}()
 	chainLogger := logger.GetLogger("chainx")
+	//queueLogger := logger.GetLogger("queue")
 	for {
-		arr, lst, err := readTW.ImmutableList("", pagination.Limit(100))
+		chainLogger.Info("chainx new dump")
+		//arr, lst, err := readTW.ImmutableList("", pagination.Limit(1000))
+		//if err != nil {
+		//	fmt.Println(err)
+		//	time.Sleep(20 * time.Second)
+		//	continue
+		//}
+		//chainLogger.Info("chainx summary ", zap.String("lst", lst),
+		//	zap.Int("len", len(arr)))
+		//
+		//fmt.Println("lst: ", lst, " arr.length: ", len(arr))
+		//fmt.Println("=====================================================")
+		tx, err := readTW.Tail()
 		if err != nil {
-			fmt.Println(err)
+			chainLogger.Error("read tail err", zap.Error(err))
 			time.Sleep(20 * time.Second)
 			continue
 		}
-		chainLogger.Info("chainx summary ", zap.String("lst", lst),
-			zap.Int("len", len(arr)))
-
-		fmt.Println("lst: ", lst, " arr.length: ", len(arr))
-		fmt.Println("=====================================================")
-
-		for i, t := range arr {
-			fmt.Println(i, " ==> ", t.Hash)
-			chainLogger.Info("chainx items ", zap.String("hash", t.Hash),
-				zap.Int("idx", i))
-		}
-		fmt.Println("=====================================================")
-
-		arr2, lst2, err := readTW.List("", pagination.Limit(100))
-		if err != nil {
-			fmt.Println(err)
-			time.Sleep(20 * time.Second)
-			continue
-		}
-
-		chainLogger.Info("chainx queue summary ", zap.String("lst", lst2),
-			zap.Int("len", len(arr2)))
-		fmt.Println("lst: ", lst2, " arr.length: ", len(arr2))
-		fmt.Println("###=====================================================")
-		for i, t := range arr2 {
-			fmt.Println(i, " ###==> ", t.Hash, " state: ", t.State)
-			chainLogger.Info("chainx items ", zap.String("hash", t.Hash),
-				zap.Int("idx", i))
-		}
-		fmt.Println("###=====================================================")
+		chainLogger.Info("chainx tail ", zap.String("tail", tx.Hash),
+			zap.String("pre", tx.Pre), zap.Int64("height", tx.Height))
+		//for i, t := range arr {
+		//	//fmt.Println(i, " ==> ", t.Hash)
+		//	chainLogger.Info("chainx items ", zap.String("hash", t.Hash),
+		//		zap.Int("idx", i), zap.Any("msg", t.Message), zap.String("pre", t.Pre))
+		//}
+		//fmt.Println("=====================================================")
+		//
+		//arr2, lst2, err := readTW.List("", pagination.Limit(1000))
+		//if err != nil {
+		//	fmt.Println(err)
+		//	time.Sleep(20 * time.Second)
+		//	continue
+		//}
+		//
+		//sys.Error("chain.lst: ", lst, " chain..length: ", len(arr))
+		//sys.Error("queue.lst: ", lst2, " queue..length: ", len(arr2))
+		//
+		//queueLogger.Info("queue queue summary ", zap.String("lst", lst2),
+		//	zap.Int("len", len(arr2)))
+		//fmt.Println("lst: ", lst2, " arr.length: ", len(arr2))
+		//fmt.Println("###=====================================================")
+		//for i, t := range arr2 {
+		//	fmt.Println(i, " ###==> ", t.Hash, " state: ", t.State)
+		//	queueLogger.Info("queue items ", zap.String("hash", t.Hash),
+		//		zap.Int8("state", int8(t.State)),
+		//		zap.Int("idx", i), zap.Any("msg", t.Message))
+		//}
+		//fmt.Println("###=====================================================")
 		//if len(arr) == 10 {
 		//	fmt.Println("OK")
 		//	return

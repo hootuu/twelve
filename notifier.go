@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	NotifierMsgBufSize = 1024
+	NotifierMsgBufSize = 102400
 )
 
 type IListener interface {
@@ -40,9 +40,9 @@ func (n *Notifier) BindListener(listener IListener) {
 }
 
 func (n *Notifier) On(msg *Message) *errors.Error {
-	if sys.RunMode.IsRd() {
-		gLogger.Info("Notifier.On", zap.Any("msg", msg))
-	}
+	//if sys.RunMode.IsRd() {
+	//	fmt.Println("Notifier.On", zap.Any("msg", msg.ID))
+	//}
 	if msg == nil {
 		return errors.Verify("require message, it is nil")
 	}

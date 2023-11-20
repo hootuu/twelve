@@ -22,12 +22,14 @@ type Tx struct {
 	State   State
 	Message *Message
 	Pre     string
+	Height  int64
 }
 
 type ImmutableTx struct {
 	Hash    string
 	Message *Message
 	Pre     string
+	Height  int64
 }
 
 const (
@@ -40,6 +42,7 @@ func HeadTx() *Tx {
 		State:   Confirmed,
 		Message: nil,
 		Pre:     HeadTxHash,
+		Height:  0,
 	}
 }
 
@@ -56,6 +59,7 @@ func (tx *Tx) Immutable() *ImmutableTx {
 		Hash:    tx.Hash,
 		Message: tx.Message,
 		Pre:     tx.Pre,
+		Height:  tx.Height,
 	}
 }
 
@@ -69,6 +73,7 @@ func (tx *Tx) Nxt(msg *Message) *Tx {
 		State:   Committed,
 		Message: msg,
 		Pre:     tx.Hash,
+		Height:  tx.Height + 1,
 	}
 	if !tx.State.IsConfirmed() {
 		txM.State = Pending

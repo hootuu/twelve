@@ -3,7 +3,6 @@ package twelve
 import (
 	"fmt"
 	"github.com/hootuu/utils/errors"
-	"github.com/hootuu/utils/logger"
 	"github.com/hootuu/utils/sys"
 	"go.uber.org/zap"
 	"sync"
@@ -30,12 +29,11 @@ const (
 type Expect struct {
 	ID        string `json:"id"`
 	Expect    uint32 `json:"expect"`
-	waitGroup chan struct{}
 	counter   uint32
 	done      chan ExpectState
 	state     ExpectState
 	timestamp time.Time
-	replier   map[string]struct{}
+	replier   sync.Map
 	lock      sync.Mutex
 }
 
@@ -47,11 +45,10 @@ func NewExpect(id string, expect int) *Expect {
 	e := &Expect{
 		ID:        id,
 		Expect:    uint32(expect),
-		waitGroup: make(chan struct{}, 12*uint32(expect)),
 		counter:   0,
-		replier:   make(map[string]struct{}),
 		done:      make(chan ExpectState),
 		state:     ExpectInit,
+		timestamp: time.Now(),
 	}
 	return e
 }
@@ -69,58 +66,60 @@ func (e *Expect) SetState(s ExpectState) {
 	defer e.lock.Unlock()
 	e.state = s
 	e.timestamp = time.Now()
-	if sys.RunMode.IsRd() {
-		gLogger.Info("expect state change", zap.Int("target", int(s)),
-			zap.String("id", e.ID))
-	}
+	//if sys.RunMode.IsRd() {
+	//	gLogger.Info("expect state change", zap.Int("target", int(s)),
+	//		zap.String("id", e.ID))
+	//}
 }
 
 func (e *Expect) Waiting(doFunc func() *errors.Error, onFunc func()) bool {
-	if sys.RunMode.IsRd() {
-		logger.Logger.Info("waiting for: ", zap.String("id", e.ID),
-			zap.Uint32("expect", e.Expect))
-	}
-	go func() {
-		e.SetState(ExpectWaiting)
-		var newCounter = e.counter
-		for {
-			if sys.RunMode.IsRd() {
-				logger.Logger.Info("continue waiting for: ", zap.String("id", e.ID),
-					zap.Uint32("expect", e.Expect), zap.Uint32("counter", newCounter))
-			}
-			end := false
-			select {
-			case <-e.waitGroup:
-				newCounter = atomic.AddUint32(&e.counter, 1)
-				if sys.RunMode.IsRd() {
-					logger.Logger.Info("done waiting for[get reply]: ", zap.String("id", e.ID),
-						zap.Uint32("expect", e.Expect), zap.Uint32("counter", newCounter))
-				}
-			case result := <-e.done:
-				end = true
-				e.done <- result
-				break
-			}
-			if end {
-				break
-			}
-		}
-		if newCounter >= e.Expect {
-			e.done <- ExpectFinished
-			close(e.done)
-		}
-
-	}()
+	//if sys.RunMode.IsRd() {
+	//	fmt.Println("waiting for: ", zap.String("id", e.ID),
+	//		zap.Uint32("expect", e.Expect))
+	//}
+	//go func() {
+	//	e.SetState(ExpectWaiting)
+	//	var newCounter = e.counter
+	//	doneResult := ExpectInit
+	//	for {
+	//		end := false
+	//		//if sys.RunMode.IsRd() {
+	//		//	gLogger.Info("continue waiting for: ", zap.String("id", e.ID),
+	//		//		zap.Uint32("expect", e.Expect), zap.Uint32("counter", newCounter))
+	//		//}
+	//		select {
+	//		case <-e.waitGroup:
+	//			newCounter = atomic.AddUint32(&e.counter, 1)
+	//			//if sys.RunMode.IsRd() {
+	//			//	gLogger.Info("done waiting for[get reply]: ", zap.String("id", e.ID),
+	//			//		zap.Uint32("expect", e.Expect), zap.Uint32("counter", newCounter))
+	//			//}
+	//			if newCounter >= e.Expect {
+	//				end = true
+	//				doneResult = ExpectFinished
+	//			}
+	//		case result := <-e.done:
+	//			end = true
+	//			doneResult = result
+	//		}
+	//		if end {
+	//			break
+	//		}
+	//	}
+	//	e.confirmDone <- doneResult
+	//}()
 	err := doFunc()
 	if err != nil {
 		gLogger.Error("expect.doFunc failed",
 			zap.String("id", e.ID),
 			zap.Error(err))
 		e.doCancel()
+		return false
 	}
 	select {
 	case result := <-e.done:
-		success := true
+		fmt.Println("when result == E->", ExpectFinished, "<- vs ", result)
+		success := false
 		switch result {
 		case ExpectFinished:
 			onFunc()
@@ -135,65 +134,80 @@ func (e *Expect) Waiting(doFunc func() *errors.Error, onFunc func()) bool {
 		}
 		return success
 	case <-time.After(DefaultExpectTimeout):
-		e.done <- ExpectTimeout
 		e.SetState(ExpectTimeout)
 		return false
 	}
 }
 
 func (e *Expect) Reply(peerID string) {
-	if sys.RunMode.IsRd() {
-		logger.Logger.Info("expect.Reply", zap.String("peerID", peerID),
-			zap.String("id", e.ID),
-			zap.Int("count", len(e.replier)))
-	}
-	e.lock.Lock()
-	defer e.lock.Unlock()
-	_, ok := e.replier[peerID]
+	//if sys.RunMode.IsRd() {
+	//	fmt.Println("expect.Reply", zap.String("peerID", peerID),
+	//		zap.String("id", e.ID),
+	//		zap.Int("count", len(e.replier)))
+	//}
+	_, ok := e.replier.Load(peerID)
 	if ok {
-		logger.Logger.Warn("repeated peerID", zap.String("peerID", peerID))
+		gLogger.Warn("repeated peerID", zap.String("peerID", peerID))
 		return
 	}
-	e.replier[peerID] = struct{}{}
-	e.waitGroup <- struct{}{}
+	e.replier.Store(peerID, struct{}{})
+	if e.IsEnd() {
+		return
+	}
+	newCounter := atomic.AddUint32(&e.counter, 1)
+	fmt.Println("newCounter==========>>>>>>>>>>>", newCounter)
+	if newCounter == e.Expect {
+		//if _, ok := <-e.done; !ok {
+		//	fmt.Println("通道已关闭=================>>>>>>>>>>>>>>>>>>>")
+		//} else {
+		fmt.Println("GO FINISHED=================>>>>>>>>>>>>>>>>>>>")
+		e.done <- ExpectFinished
+		//}
+	}
 }
 
 func (e *Expect) doCancel() {
 	e.done <- ExpectCanceled
 }
 
+func (e *Expect) doClose() {
+	//close(e.waitGroup)
+	close(e.done)
+	//close(e.confirmDone)
+}
+
 type ExpectFactory struct {
-	db   map[string]*Expect
-	lock sync.Mutex
+	db sync.Map
 }
 
 func NewExpectFactory() *ExpectFactory {
-	return &ExpectFactory{
-		db:   make(map[string]*Expect),
-		lock: sync.Mutex{},
-	}
+	return &ExpectFactory{}
 }
 
 func (ef *ExpectFactory) Build(peerID string, hash string, forType Type, expect int) *Expect {
-	ef.lock.Lock()
-	defer ef.lock.Unlock()
 	id := ExpectID(peerID, hash, forType)
-	e, ok := ef.db[id]
+	val, ok := ef.db.Load(id)
 	if ok {
-		return e
+		fmt.Println(peerID, hash, forType, expect)
+		sys.Exit(errors.Sys("repeated expect")) //todo
+		if e, ok := val.(*Expect); ok {
+			return e
+		}
+		return nil //todo
 	}
-	e = NewExpect(id, expect)
-	ef.db[id] = e
+	e := NewExpect(id, expect)
+	ef.db.Store(id, e)
 	return e
 }
 
 func (ef *ExpectFactory) MustGet(peerID string, hash string, forType Type) (*Expect, *errors.Error) {
-	ef.lock.Lock()
-	defer ef.lock.Unlock()
 	id := ExpectID(peerID, hash, forType)
-	e, ok := ef.db[id]
+	val, ok := ef.db.Load(id)
 	if ok {
-		return e, nil
+		if e, ok := val.(*Expect); ok {
+			return e, nil
+		}
+		return nil, errors.Sys("invalid expect") //todo
 	}
 	return nil, errors.Sys("the expect not exists or has been destroyed")
 }
@@ -201,27 +215,31 @@ func (ef *ExpectFactory) MustGet(peerID string, hash string, forType Type) (*Exp
 func (ef *ExpectFactory) StartGC() {
 	go func() {
 		for {
-			time.Sleep(5 * time.Second)
+			time.Sleep(60 * time.Second)
+
+			var count int64 = 0
 			var needRm []string
-			for _, e := range ef.db {
-				if !e.IsEnd() {
-					continue
+			ef.db.Range(func(key, value any) bool {
+				count += 1
+				id := key.(string)
+				e := value.(*Expect)
+				if e.IsEnd() {
+					return true
 				}
-				if time.Now().Sub(e.timestamp) < 10*time.Second {
-					continue
-				}
-				needRm = append(needRm, e.ID)
-			}
+				needRm = append(needRm, id)
+				return true
+			})
+
 			if len(needRm) > 0 {
-				ef.lock.Lock()
 				for _, id := range needRm {
-					delete(ef.db, id)
+					ef.db.Delete(id)
 					if sys.RunMode.IsRd() {
 						gLogger.Info("remove expect: ", zap.String("id", id))
 					}
 				}
-				ef.lock.Unlock()
 			}
+
+			fmt.Println("the EF length:==><==", count)
 		}
 	}()
 }

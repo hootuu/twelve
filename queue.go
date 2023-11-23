@@ -1,6 +1,9 @@
 package twelve
 
 import (
+	"fmt"
+	"github.com/hootuu/tome/kt"
+	"github.com/hootuu/tome/vn"
 	"github.com/hootuu/utils/errors"
 	"github.com/hootuu/utils/sys"
 	"github.com/hootuu/utils/types/pagination"
@@ -19,14 +22,17 @@ type Queue struct {
 	lock          sync.RWMutex
 }
 
-func NewQueue(peerID string, name string) (*Queue, *errors.Error) {
+var gQueueIdx = 0 //todo will delete
+
+func NewQueue(vnID vn.ID, chain kt.Chain) (*Queue, *errors.Error) {
 	q := &Queue{
 		tail:          HeadTx(),
 		immutableTail: HeadTx().Immutable(),
 		lock:          sync.RWMutex{},
 	}
 	var err *errors.Error
-	q.txCang, err = NewTxCang(name, ".twelve/"+peerID+"/")
+	q.txCang, err = NewTxCang(chain.S(), ".twelve/"+vnID.S()+"/"+fmt.Sprintf("%d", gQueueIdx))
+	gQueueIdx++ //todo will delete
 	if err != nil {
 		return nil, err
 	}
@@ -60,10 +66,10 @@ func (q *Queue) ImmutableMustGet(hash string) (*ImmutableTx, *errors.Error) {
 	return &txM, nil
 }
 
-func (q *Queue) Append(msg *Message) (*Tx, *errors.Error) {
+func (q *Queue) Append(letter *Letter) (*Tx, *errors.Error) {
 	q.lock.Lock()
 	q.lock.Unlock()
-	txM := q.tail.Nxt(msg)
+	txM := q.tail.Nxt(letter)
 	exists, err := q.txCang.QCollection(txM.Hash).Exists(txM.Hash)
 	if err != nil {
 		return nil, err

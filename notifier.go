@@ -11,16 +11,16 @@ const (
 )
 
 type IListener interface {
-	OnRequest(msg *Message)
-	OnPrepare(msg *Message)
-	OnCommitted(msg *Message)
-	OnConfirmed(msg *Message)
+	OnRequest(msg *Letter)
+	OnPrepare(msg *Letter)
+	OnCommitted(msg *Letter)
+	OnConfirmed(msg *Letter)
 }
 
 type Notifier struct {
 	node     ITwelveNode
 	listener IListener
-	buf      chan *Message
+	buf      chan *Letter
 }
 
 func NewNotifier(node ITwelveNode) *Notifier {
@@ -29,7 +29,7 @@ func NewNotifier(node ITwelveNode) *Notifier {
 	}
 	ntf := &Notifier{
 		node: node,
-		buf:  make(chan *Message, NotifierMsgBufSize),
+		buf:  make(chan *Letter, NotifierMsgBufSize),
 	}
 	node.Register(ntf)
 	return ntf
@@ -39,49 +39,46 @@ func (n *Notifier) BindListener(listener IListener) {
 	n.listener = listener
 }
 
-func (n *Notifier) On(msg *Message) *errors.Error {
-	//if sys.RunMode.IsRd() {
-	//	fmt.Println("Notifier.On", zap.Any("msg", msg.ID))
-	//}
-	if msg == nil {
-		return errors.Verify("require message, it is nil")
+func (n *Notifier) On(letter *Letter) *errors.Error {
+	if letter == nil {
+		return errors.Verify("require letter, it is nil")
 	}
 	select {
-	case n.buf <- msg:
+	case n.buf <- letter:
 		return nil
 	default:
 		return errors.Sys("The buffer is full")
 	}
 }
 
-func (n *Notifier) Notify(msg *Message) *errors.Error {
-	return n.node.Notify(msg)
+func (n *Notifier) Notify(letter *Letter) *errors.Error {
+	return n.node.Notify(letter)
 }
 
 func (n *Notifier) Listening() {
 	go func() {
 		for {
 			sys.Info("========>>>>> Listening.....")
-			msg := <-n.buf
+			letter := <-n.buf
 			if sys.RunMode.IsRd() {
-				gLogger.Info("Notifier.Listening", zap.Any("msg", msg))
+				gLogger.Info("Notifier.Listening", zap.Any("letter", letter))
 			}
-			switch msg.Type {
-			case RequestMessage:
+			switch letter.Arrow {
+			case RequestArrow:
 				sys.Info("========>>>>> Listening.OnRequest.1....")
-				n.listener.OnRequest(msg)
+				n.listener.OnRequest(letter)
 				sys.Info("========>>>>> Listening.OnRequest.2....")
-			case PrepareMessage:
+			case PrepareArrow:
 				sys.Info("========>>>>> Listening.OnPrepare.1....")
-				n.listener.OnPrepare(msg)
+				n.listener.OnPrepare(letter)
 				sys.Info("========>>>>> Listening.OnPrepare.2....")
-			case CommittedMessage:
+			case CommittedArrow:
 				sys.Info("========>>>>> Listening.OnCommitted.1....")
-				n.listener.OnCommitted(msg)
+				n.listener.OnCommitted(letter)
 				sys.Info("========>>>>> Listening.OnCommitted.2....")
-			case ConfirmedMessage:
+			case ConfirmedArrow:
 				sys.Info("========>>>>> Listening.OnConfirmed.1....")
-				n.listener.OnConfirmed(msg)
+				n.listener.OnConfirmed(letter)
 				sys.Info("========>>>>> Listening.OnConfirmed.2....")
 			}
 		}

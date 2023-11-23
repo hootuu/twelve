@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/hootuu/tome/bk"
-	"github.com/hootuu/tome/pr"
+	"github.com/hootuu/tome/bk/bid"
+	"github.com/hootuu/tome/kt"
+	"github.com/hootuu/tome/nd"
+	"github.com/hootuu/tome/vn"
 	"github.com/hootuu/twelve"
 	"github.com/hootuu/utils/logger"
 	"go.uber.org/zap"
@@ -28,22 +30,22 @@ func main() {
 	//	return
 	//}
 	type fields struct {
-		chain  bk.Chain
+		vn     vn.ID
+		chain  kt.Chain
 		peers  int
 		option *twelve.Option
 	}
 	ttfields := &fields{
+		vn:     "testVN",
 		chain:  "test.chain.001",
 		peers:  15,
 		option: nil,
 	}
 
 	bus := &twelve.MemTwelveListenerBus{}
-	readNode := twelve.NewMemTwelveNode(bus, &pr.Local{
-		ID:  "node_001",
-		PRI: "0xf07b88a2bba771b2b9d141589a8d179cff9ea4de257e55c833c6e7dfbe3deb27",
-	})
-	readTW, err := twelve.NewTwelve(ttfields.chain, readNode, ttfields.option)
+	rn, _ := nd.NewNode("node_001", "0xf07b88a2bba771b2b9d141589a8d179cff9ea4de257e55c833c6e7dfbe3deb27")
+	readNode := twelve.NewMemTwelveNode(bus, rn)
+	readTW, err := twelve.NewTwelve(ttfields.vn, ttfields.chain, readNode, ttfields.option)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -55,17 +57,15 @@ func main() {
 	wNodes = append(wNodes, readNode)
 	//var oneWTW *twelve.Twelve
 	for i := 0; i < ttfields.peers; i++ {
-		fmt.Println("NEW TWELVE NODe:", i)
-		node := twelve.NewMemTwelveNode(bus, &pr.Local{
-			ID:  fmt.Sprintf("w_node_%d", i),
-			PRI: "0xf07b88a2bba771b2b9d141589a8d179cff9ea4de257e55c833c6e7dfbe3deb27",
-		})
+		fmt.Println("NEW TWELVE NODE:", i)
+		nn, _ := nd.NewNode(nd.ID(fmt.Sprintf("w_node_%d", i)), "0xf07b88a2bba771b2b9d141589a8d179cff9ea4de257e55c833c6e7dfbe3deb27")
+		node := twelve.NewMemTwelveNode(bus, nn)
 
 		fmt.Println("NEW TWELVE NODE OK:", i)
 		wNodes = append(wNodes, node)
 
 		fmt.Println("NEW TWELVE ...", i)
-		tw, err := twelve.NewTwelve(ttfields.chain, node, ttfields.option)
+		tw, err := twelve.NewTwelve(ttfields.vn, ttfields.chain, node, ttfields.option)
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -78,23 +78,23 @@ func main() {
 	go func() {
 
 		for i := 0; i < 5000000; i++ {
-			here, _ := readNode.Peer().Peer()
-			thisPeer := twelve.PeerOf(here)
-			rp := &twelve.RequestPayload{
-				Action:    "incribe",
-				Parameter: []byte(fmt.Sprintf("tx_%d", i)),
-			}
-			msg, err := twelve.NewMessage(twelve.RequestMessage, rp, thisPeer, readNode.Peer().PRI)
+			letter := twelve.NewLetter(
+				ttfields.vn,
+				ttfields.chain,
+				bid.BID(fmt.Sprintf("tx_%d", i)),
+				twelve.RequestArrow,
+				readNode.Node().ID)
+			err := letter.Sign(readNode.Node().PRI)
 			if err != nil {
 				fmt.Println(err)
 				return
 			}
-			err = readNode.Notify(msg)
+			err = readNode.Notify(letter)
 			if err != nil {
 				fmt.Println(err)
 				return
 			}
-			time.Sleep(1 * time.Second)
+			time.Sleep(50 * time.Millisecond)
 		}
 
 	}()

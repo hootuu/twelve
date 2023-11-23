@@ -1,19 +1,19 @@
 package twelve
 
 import (
-	"github.com/hootuu/tome/pr"
+	"github.com/hootuu/tome/nd"
 	"github.com/hootuu/utils/errors"
 	"go.uber.org/zap"
 )
 
 type ITwelveListener interface {
-	On(msg *Message) *errors.Error
+	On(letter *Letter) *errors.Error
 }
 
 type ITwelveNode interface {
 	Register(listener ITwelveListener)
-	Notify(msg *Message) *errors.Error
-	Peer() *pr.Local
+	Notify(letter *Letter) *errors.Error
+	Node() *nd.Node
 }
 
 type MemTwelveListenerBus struct {
@@ -22,13 +22,13 @@ type MemTwelveListenerBus struct {
 
 type MemTwelveNode struct {
 	bus  *MemTwelveListenerBus
-	peer *pr.Local
+	node *nd.Node
 }
 
-func NewMemTwelveNode(bus *MemTwelveListenerBus, peer *pr.Local) *MemTwelveNode {
+func NewMemTwelveNode(bus *MemTwelveListenerBus, node *nd.Node) *MemTwelveNode {
 	return &MemTwelveNode{
 		bus:  bus,
-		peer: peer,
+		node: node,
 	}
 }
 
@@ -36,7 +36,7 @@ func (m *MemTwelveNode) Register(listener ITwelveListener) {
 	m.bus.listeners = append(m.bus.listeners, listener)
 }
 
-func (m *MemTwelveNode) Notify(msg *Message) *errors.Error {
+func (m *MemTwelveNode) Notify(letter *Letter) *errors.Error {
 	if len(m.bus.listeners) == 0 {
 		return nil
 	}
@@ -44,14 +44,14 @@ func (m *MemTwelveNode) Notify(msg *Message) *errors.Error {
 	//	gLogger.Info("notify msg: ", zap.Any("msg", msg))
 	//}
 	for _, listener := range m.bus.listeners {
-		err := listener.On(msg)
+		err := listener.On(letter)
 		if err != nil {
-			gLogger.Error("listener.On(msg) failed", zap.Error(err), zap.Any("msg", msg))
+			gLogger.Error("listener.On(msg) failed", zap.Error(err), zap.Any("letter", letter))
 		}
 	}
 	return nil
 }
 
-func (m *MemTwelveNode) Peer() *pr.Local {
-	return m.peer
+func (m *MemTwelveNode) Node() *nd.Node {
+	return m.node
 }

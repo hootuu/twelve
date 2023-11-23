@@ -37,8 +37,8 @@ type Expect struct {
 	lock      sync.Mutex
 }
 
-func ExpectID(peerID string, hash string, forType Type) string {
-	return fmt.Sprintf("%s_%s_%d", peerID, hash, forType)
+func ExpectID(peerID string, hash string, forArrow Arrow) string {
+	return fmt.Sprintf("%s_%s_%d", peerID, hash, forArrow)
 }
 
 func NewExpect(id string, expect int) *Expect {
@@ -184,11 +184,11 @@ func NewExpectFactory() *ExpectFactory {
 	return &ExpectFactory{}
 }
 
-func (ef *ExpectFactory) Build(peerID string, hash string, forType Type, expect int) *Expect {
-	id := ExpectID(peerID, hash, forType)
+func (ef *ExpectFactory) Build(peerID string, hash string, forArrow Arrow, expect int) *Expect {
+	id := ExpectID(peerID, hash, forArrow)
 	val, ok := ef.db.Load(id)
 	if ok {
-		fmt.Println(peerID, hash, forType, expect)
+		fmt.Println(peerID, hash, forArrow, expect)
 		sys.Exit(errors.Sys("repeated expect")) //todo
 		if e, ok := val.(*Expect); ok {
 			return e
@@ -200,8 +200,8 @@ func (ef *ExpectFactory) Build(peerID string, hash string, forType Type, expect 
 	return e
 }
 
-func (ef *ExpectFactory) MustGet(peerID string, hash string, forType Type) (*Expect, *errors.Error) {
-	id := ExpectID(peerID, hash, forType)
+func (ef *ExpectFactory) MustGet(peerID string, hash string, forArrow Arrow) (*Expect, *errors.Error) {
+	id := ExpectID(peerID, hash, forArrow)
 	val, ok := ef.db.Load(id)
 	if ok {
 		if e, ok := val.(*Expect); ok {

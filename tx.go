@@ -18,18 +18,18 @@ func (s State) IsConfirmed() bool {
 }
 
 type Tx struct {
-	Hash    string
-	State   State
-	Message *Message
-	Pre     string
-	Height  int64
+	Hash   string
+	State  State
+	Letter *Letter
+	Pre    string
+	Height int64
 }
 
 type ImmutableTx struct {
-	Hash    string
-	Message *Message
-	Pre     string
-	Height  int64
+	Hash   string
+	Letter *Letter
+	Pre    string
+	Height int64
 }
 
 const (
@@ -38,11 +38,11 @@ const (
 
 func HeadTx() *Tx {
 	return &Tx{
-		Hash:    HeadTxHash,
-		State:   Confirmed,
-		Message: nil,
-		Pre:     HeadTxHash,
-		Height:  0,
+		Hash:   HeadTxHash,
+		State:  Confirmed,
+		Letter: nil,
+		Pre:    HeadTxHash,
+		Height: 0,
 	}
 }
 
@@ -56,10 +56,10 @@ func (tx *Tx) IsHead() bool {
 
 func (tx *Tx) Immutable() *ImmutableTx {
 	return &ImmutableTx{
-		Hash:    tx.Hash,
-		Message: tx.Message,
-		Pre:     tx.Pre,
-		Height:  tx.Height,
+		Hash:   tx.Hash,
+		Letter: tx.Letter,
+		Pre:    tx.Pre,
+		Height: tx.Height,
 	}
 }
 
@@ -67,13 +67,13 @@ func (tx *Tx) Confirm() {
 	tx.State = Confirmed
 }
 
-func (tx *Tx) Nxt(msg *Message) *Tx {
+func (tx *Tx) Nxt(letter *Letter) *Tx {
 	txM := &Tx{
-		Hash:    msg.ID,
-		State:   Committed,
-		Message: msg,
-		Pre:     tx.Hash,
-		Height:  tx.Height + 1,
+		Hash:   letter.Signature.Hash,
+		State:  Committed,
+		Letter: letter,
+		Pre:    tx.Hash,
+		Height: tx.Height + 1,
 	}
 	if !tx.State.IsConfirmed() {
 		txM.State = Pending

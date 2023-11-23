@@ -1,8 +1,9 @@
 package twelve
 
 import (
-	"github.com/hootuu/tome/bk"
-	"github.com/hootuu/tome/pr"
+	"github.com/hootuu/tome/kt"
+	"github.com/hootuu/tome/nd"
+	"github.com/hootuu/tome/vn"
 	"github.com/hootuu/utils/errors"
 	"github.com/hootuu/utils/sys"
 	"github.com/hootuu/utils/types/pagination"
@@ -15,17 +16,19 @@ type Option struct {
 }
 
 type Twelve struct {
-	chain    bk.Chain
+	vnID     vn.ID
+	chain    kt.Chain
 	queue    *Queue
 	notifier *Notifier
-	peer     *pr.Local
-	here     *Peer
+	node     *nd.Lead
+	here     *nd.Node
 	option   *Option
 	lock     sync.Mutex
 }
 
 func NewTwelve(
-	chain bk.Chain,
+	vnID vn.ID,
+	chain kt.Chain,
 	twelveNode ITwelveNode,
 	option *Option,
 ) (*Twelve, *errors.Error) {
@@ -34,10 +37,6 @@ func NewTwelve(
 	}
 	if twelveNode == nil {
 		return nil, errors.Verify("require twelve node")
-	}
-	peer := twelveNode.Peer()
-	if peer == nil {
-		return nil, errors.Verify("require twelve node peer")
 	}
 	if option == nil {
 		if sys.RunMode.IsRd() {
@@ -49,28 +48,24 @@ func NewTwelve(
 	tw := &Twelve{
 		chain:    chain,
 		notifier: NewNotifier(twelveNode),
-		peer:     peer,
+		node:     twelveNode.Node().Lead(),
 		option:   option,
 	}
 	var err *errors.Error
-	tw.queue, err = NewQueue(peer.ID, tw.chain.S())
+	tw.queue, err = NewQueue(vnID, chain)
 	if err != nil {
 		return nil, err
 	}
 	tw.notifier.BindListener(tw)
-	herePeer, err := peer.Peer()
-	if err != nil {
-		return nil, err
-	}
-	tw.here = PeerOf(herePeer)
+	tw.here = twelveNode.Node()
 	return tw, nil
 }
 
-func (tw *Twelve) OnRequest(msg *Message) {
-	tx, err := tw.queue.Append(msg)
+func (tw *Twelve) OnRequest(letter *Letter) {
+	tx, err := tw.queue.Append(letter)
 	if err != nil {
 		gLogger.Error("twelve.queue.Append(msg) failed",
-			zap.Any("hash", msg), zap.Error(err))
+			zap.Any("hash", letter), zap.Error(err))
 		return
 	}
 	err = tw.doPrepare(tx.Hash)
@@ -89,23 +84,14 @@ func (tw *Twelve) doPrepare(hash string) *errors.Error {
 	if err != nil {
 		return err
 	}
-	requestPayload, err := tx.Message.GetRequestPayload()
+	prepareLetter := NewLetter(tw.vnID, tw.chain, tx.Letter.Invariable, PrepareArrow, tw.here.ID)
+	err = prepareLetter.Sign(tw.here.PRI)
 	if err != nil {
 		return err
 	}
-	if requestPayload == nil {
-		gLogger.Error("invalid message, require Request Payload", zap.Any("tx", tx))
-		return errors.Sys("invalid message, require Request Payload")
-	}
-	prepareMsg, err := NewMessage(PrepareMessage, &ReplyPayload{
-		ID: tx.Hash,
-	}, tw.here, tw.peer.PRI)
-	if err != nil {
-		return err
-	}
-	expect := gExpectFactory.Build(tw.peer.ID, tx.Hash, PrepareMessage, tw.option.Expect)
+	expect := gExpectFactory.Build(tw.here.ID.S(), tx.Hash, PrepareArrow, tw.option.Expect)
 	go expect.Waiting(func() *errors.Error {
-		return tw.notifier.Notify(prepareMsg)
+		return tw.notifier.Notify(prepareLetter)
 	}, func() {
 		err := tw.doCommit(tx.Hash)
 		if err != nil {
@@ -123,22 +109,14 @@ func (tw *Twelve) doCommit(hash string) *errors.Error {
 	if err != nil {
 		return err
 	}
-	replyPayload, err := tx.Message.GetReplyPayload()
+	committedLetter := NewLetter(tw.vnID, tw.chain, tx.Letter.Invariable, CommittedArrow, tw.here.ID)
+	err = committedLetter.Sign(tw.here.PRI)
 	if err != nil {
 		return err
 	}
-	if replyPayload == nil {
-		return errors.Sys("invalid message, require Reply Payload")
-	}
-	committedMsg, err := NewMessage(CommittedMessage, &ReplyPayload{
-		ID: tx.Hash,
-	}, tw.here, tw.peer.PRI)
-	if err != nil {
-		return err
-	}
-	expect := gExpectFactory.Build(tw.peer.ID, tx.Hash, CommittedMessage, tw.option.Expect)
+	expect := gExpectFactory.Build(tw.node.ID.S(), tx.Hash, CommittedArrow, tw.option.Expect)
 	go expect.Waiting(func() *errors.Error {
-		return tw.notifier.Notify(committedMsg)
+		return tw.notifier.Notify(committedLetter)
 	}, func() {
 		err := tw.doConfirm(tx.Hash)
 		if err != nil {
@@ -156,22 +134,15 @@ func (tw *Twelve) doConfirm(hash string) *errors.Error {
 	if err != nil {
 		return err
 	}
-	replyPayload, err := tx.Message.GetReplyPayload()
+
+	confirmedLetter := NewLetter(tw.vnID, tw.chain, tx.Letter.Invariable, ConfirmedArrow, tw.here.ID)
+	err = confirmedLetter.Sign(tw.here.PRI)
 	if err != nil {
 		return err
 	}
-	if replyPayload == nil {
-		return errors.Sys("invalid message, require Reply Payload")
-	}
-	confirmedMsg, err := NewMessage(ConfirmedMessage, &ReplyPayload{
-		ID: tx.Hash,
-	}, tw.here, tw.peer.PRI)
-	if err != nil {
-		return err
-	}
-	expect := gExpectFactory.Build(tw.peer.ID, tx.Hash, ConfirmedMessage, tw.option.Expect)
+	expect := gExpectFactory.Build(tw.node.ID.S(), tx.Hash, ConfirmedArrow, tw.option.Expect)
 	go expect.Waiting(func() *errors.Error {
-		return tw.notifier.Notify(confirmedMsg)
+		return tw.notifier.Notify(confirmedLetter)
 	}, func() {
 		_, err := tw.queue.Confirm(tx.Hash)
 		if err != nil {
@@ -181,41 +152,26 @@ func (tw *Twelve) doConfirm(hash string) *errors.Error {
 	return nil
 }
 
-func (tw *Twelve) doOnMessage(msg *Message) {
-	//if sys.RunMode.IsRd() {
-	//	gLogger.Info("twelve.on.message", zap.String("id", msg.ID),
-	//		zap.Int("type", int(msg.Type)))
-	//}
-	replyPayload, err := msg.GetReplyPayload()
+func (tw *Twelve) doOnMessage(letter *Letter) {
+	hash := letter.Invariable.S()
+	expect, err := gExpectFactory.MustGet(tw.here.ID.S(), hash, letter.Arrow)
 	if err != nil {
-		gLogger.Error("doOnMessage: msg is invalid",
-			zap.Any("msg", msg), zap.Error(err))
+		gLogger.Error("no such expect[PrepareMessage]", zap.String("letter.invariable", hash))
 		return
 	}
-	if replyPayload == nil {
-		gLogger.Error("doOnMessage: msg is invalid, replyPayload==nil",
-			zap.Any("msg", msg))
-		return
-	}
-	hash := replyPayload.ID
-	expect, err := gExpectFactory.MustGet(tw.peer.ID, hash, msg.Type)
-	if err != nil {
-		gLogger.Error("no such expect[PrepareMessage]", zap.String("hash", hash))
-		return
-	}
-	go expect.Reply(msg.Peer.ID)
+	go expect.Reply(letter.From.S())
 }
 
-func (tw *Twelve) OnPrepare(msg *Message) {
-	tw.doOnMessage(msg)
+func (tw *Twelve) OnPrepare(letter *Letter) {
+	tw.doOnMessage(letter)
 }
 
-func (tw *Twelve) OnCommitted(msg *Message) {
-	tw.doOnMessage(msg)
+func (tw *Twelve) OnCommitted(letter *Letter) {
+	tw.doOnMessage(letter)
 }
 
-func (tw *Twelve) OnConfirmed(msg *Message) {
-	tw.doOnMessage(msg)
+func (tw *Twelve) OnConfirmed(letter *Letter) {
+	tw.doOnMessage(letter)
 }
 
 func (tw *Twelve) Start() {

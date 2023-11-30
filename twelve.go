@@ -90,6 +90,12 @@ func (tw *Twelve) doPrepare(hash string) *errors.Error {
 		return err
 	}
 	expect := gExpectFactory.Build(tw.here.ID.S(), tx.Hash, PrepareArrow, tw.option.Expect)
+	if sys.RunMode.IsRd() {
+		gLogger.Info("build expect for prepare", zap.String("peerID", tw.here.ID.S()),
+			zap.String("hash", hash),
+			zap.Int32("arrow", int32(PrepareArrow)),
+			zap.String("letter.invariable", hash))
+	}
 	go expect.Waiting(func() *errors.Error {
 		return tw.notifier.Notify(prepareLetter)
 	}, func() {
@@ -115,6 +121,12 @@ func (tw *Twelve) doCommit(hash string) *errors.Error {
 		return err
 	}
 	expect := gExpectFactory.Build(tw.node.ID.S(), tx.Hash, CommittedArrow, tw.option.Expect)
+	if sys.RunMode.IsRd() {
+		gLogger.Info("build expect for commit", zap.String("peerID", tw.here.ID.S()),
+			zap.String("hash", hash),
+			zap.Int32("arrow", int32(CommittedArrow)),
+			zap.String("letter.invariable", hash))
+	}
 	go expect.Waiting(func() *errors.Error {
 		return tw.notifier.Notify(committedLetter)
 	}, func() {
@@ -141,6 +153,12 @@ func (tw *Twelve) doConfirm(hash string) *errors.Error {
 		return err
 	}
 	expect := gExpectFactory.Build(tw.node.ID.S(), tx.Hash, ConfirmedArrow, tw.option.Expect)
+	if sys.RunMode.IsRd() {
+		gLogger.Info("build expect for confirm", zap.String("peerID", tw.here.ID.S()),
+			zap.String("hash", hash),
+			zap.Int32("arrow", int32(ConfirmedArrow)),
+			zap.String("letter.invariable", hash))
+	}
 	go expect.Waiting(func() *errors.Error {
 		return tw.notifier.Notify(confirmedLetter)
 	}, func() {
@@ -156,7 +174,11 @@ func (tw *Twelve) doOnMessage(letter *Letter) {
 	hash := letter.Invariable.S()
 	expect, err := gExpectFactory.MustGet(tw.here.ID.S(), hash, letter.Arrow)
 	if err != nil {
-		gLogger.Error("no such expect[PrepareMessage]", zap.String("letter.invariable", hash))
+		gLogger.Error("no such expect",
+			zap.String("peerID", tw.here.ID.S()),
+			zap.String("hash", hash),
+			zap.Int32("arrow", int32(letter.Arrow)),
+			zap.String("letter.invariable", hash))
 		return
 	}
 	go expect.Reply(letter.From.S())

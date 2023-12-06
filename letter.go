@@ -10,6 +10,10 @@ import (
 	"github.com/hootuu/utils/errors"
 )
 
+const (
+	ErrInvalidLetter = "Invalid Letter"
+)
+
 type Arrow int32
 
 const (

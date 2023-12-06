@@ -63,13 +63,17 @@ func (tx *Tx) Immutable() *ImmutableTx {
 	}
 }
 
+func (tx *Tx) ImmutableHash() string {
+	return tx.Letter.Invariable.S()
+}
+
 func (tx *Tx) Confirm() {
 	tx.State = Confirmed
 }
 
 func (tx *Tx) Nxt(letter *Letter) *Tx {
 	txM := &Tx{
-		Hash:   letter.Signature.Hash,
+		Hash:   letter.Invariable.S(),
 		State:  Committed,
 		Letter: letter,
 		Pre:    tx.Hash,

@@ -57,6 +57,10 @@ func (q *Queue) MustGet(hash string) (*Tx, *errors.Error) {
 	return &txM, nil
 }
 
+func (q *Queue) Exists(hash string) (bool, *errors.Error) {
+	return q.txCang.QCollection(hash).Exists(hash)
+}
+
 func (q *Queue) ImmutableMustGet(hash string) (*ImmutableTx, *errors.Error) {
 	var txM ImmutableTx
 	err := q.txCang.CCollection(hash).MustGet(hash, &txM)
@@ -70,7 +74,7 @@ func (q *Queue) Append(letter *Letter) (*Tx, *errors.Error) {
 	q.lock.Lock()
 	q.lock.Unlock()
 	txM := q.tail.Nxt(letter)
-	exists, err := q.txCang.QCollection(txM.Hash).Exists(txM.Hash)
+	exists, err := q.txCang.QCollection(txM.ImmutableHash()).Exists(txM.ImmutableHash())
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +83,7 @@ func (q *Queue) Append(letter *Letter) (*Tx, *errors.Error) {
 	}
 
 	sys.Info("append tx ", txM.Hash, " pre: ", txM.Pre)
-	err = q.txCang.QCollection(txM.Hash).Put(txM.Hash, txM)
+	err = q.txCang.QCollection(txM.ImmutableHash()).Put(txM.ImmutableHash(), txM)
 	if err != nil {
 		return nil, err
 	}
@@ -95,13 +99,14 @@ func (q *Queue) Confirm(hash string) (*ImmutableTx, *errors.Error) {
 		return nil, err
 	}
 	tx.Confirm()
-	err = q.txCang.QCollection(tx.Hash).Put(tx.Hash, tx)
+	err = q.txCang.QCollection(tx.ImmutableHash()).Put(tx.ImmutableHash(), tx)
 	if err != nil {
 		return nil, err
 	}
 	immutableTx := tx.Immutable()
 	gLogger.Info("confirm_tx", zap.String("hash", immutableTx.Hash), zap.String(" pre: ", immutableTx.Pre))
 	sys.Info("confirm tx ", immutableTx.Hash, " pre: ", immutableTx.Pre)
+	gChainLogger.Info("MING KE", zap.Any("TX", immutableTx))
 	err = q.txCang.CCollection(immutableTx.Hash).Put(immutableTx.Hash, immutableTx)
 	if err != nil {
 		return nil, err

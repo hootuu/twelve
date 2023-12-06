@@ -61,19 +61,20 @@ func NewTwelve(
 	return tw, nil
 }
 
-func (tw *Twelve) OnRequest(letter *Letter) {
+func (tw *Twelve) OnRequest(letter *Letter) *errors.Error {
 	tx, err := tw.queue.Append(letter)
 	if err != nil {
 		gLogger.Error("twelve.queue.Append(msg) failed",
 			zap.Any("hash", letter), zap.Error(err))
-		return
+		return err
 	}
-	err = tw.doPrepare(tx.Hash)
+	err = tw.doPrepare(tx.ImmutableHash())
 	if err != nil {
 		gLogger.Error("tw.doPrepare(j.Hash) failed",
 			zap.String("tx", tx.Hash), zap.Error(err))
-		return
+		return err
 	}
+	return nil
 }
 
 func (tw *Twelve) doPrepare(hash string) *errors.Error {
@@ -89,19 +90,18 @@ func (tw *Twelve) doPrepare(hash string) *errors.Error {
 	if err != nil {
 		return err
 	}
-	expect := gExpectFactory.Build(tw.here.ID.S(), tx.Hash, PrepareArrow, tw.option.Expect)
+	expect := gExpectFactory.Build(tw.here.ID.S(), tx.ImmutableHash(), PrepareArrow, tw.option.Expect)
 	if sys.RunMode.IsRd() {
 		gLogger.Info("build expect for prepare", zap.String("peerID", tw.here.ID.S()),
-			zap.String("hash", hash),
-			zap.Int32("arrow", int32(PrepareArrow)),
-			zap.String("letter.invariable", hash))
+			zap.String("hash", tx.ImmutableHash()),
+			zap.Int32("arrow", int32(PrepareArrow)))
 	}
 	go expect.Waiting(func() *errors.Error {
 		return tw.notifier.Notify(prepareLetter)
 	}, func() {
-		err := tw.doCommit(tx.Hash)
+		err := tw.doCommit(tx.ImmutableHash())
 		if err != nil {
-			gLogger.Error("doCommit failed", zap.String("tx", tx.Hash), zap.Error(err))
+			gLogger.Error("doCommit failed", zap.String("tx", tx.ImmutableHash()), zap.Error(err))
 		}
 	})
 	return nil
@@ -120,17 +120,16 @@ func (tw *Twelve) doCommit(hash string) *errors.Error {
 	if err != nil {
 		return err
 	}
-	expect := gExpectFactory.Build(tw.node.ID.S(), tx.Hash, CommittedArrow, tw.option.Expect)
+	expect := gExpectFactory.Build(tw.node.ID.S(), tx.ImmutableHash(), CommittedArrow, tw.option.Expect)
 	if sys.RunMode.IsRd() {
 		gLogger.Info("build expect for commit", zap.String("peerID", tw.here.ID.S()),
-			zap.String("hash", hash),
-			zap.Int32("arrow", int32(CommittedArrow)),
-			zap.String("letter.invariable", hash))
+			zap.String("hash", tx.ImmutableHash()),
+			zap.Int32("arrow", int32(CommittedArrow)))
 	}
 	go expect.Waiting(func() *errors.Error {
 		return tw.notifier.Notify(committedLetter)
 	}, func() {
-		err := tw.doConfirm(tx.Hash)
+		err := tw.doConfirm(tx.ImmutableHash())
 		if err != nil {
 			gLogger.Error("doConfirm failed", zap.String("tx", tx.Hash), zap.Error(err))
 		}
@@ -152,48 +151,56 @@ func (tw *Twelve) doConfirm(hash string) *errors.Error {
 	if err != nil {
 		return err
 	}
-	expect := gExpectFactory.Build(tw.node.ID.S(), tx.Hash, ConfirmedArrow, tw.option.Expect)
+	expect := gExpectFactory.Build(tw.node.ID.S(), tx.ImmutableHash(), ConfirmedArrow, tw.option.Expect)
 	if sys.RunMode.IsRd() {
 		gLogger.Info("build expect for confirm", zap.String("peerID", tw.here.ID.S()),
-			zap.String("hash", hash),
-			zap.Int32("arrow", int32(ConfirmedArrow)),
-			zap.String("letter.invariable", hash))
+			zap.String("hash", tx.ImmutableHash()),
+			zap.Int32("arrow", int32(ConfirmedArrow)))
 	}
 	go expect.Waiting(func() *errors.Error {
 		return tw.notifier.Notify(confirmedLetter)
 	}, func() {
-		_, err := tw.queue.Confirm(tx.Hash)
+		_, err := tw.queue.Confirm(tx.ImmutableHash())
 		if err != nil {
-			gLogger.Error("tw.queue.Confirm(tx.Hash) failed", zap.String("hash", tx.Hash))
+			gLogger.Error("tw.queue.Confirm(tx.Hash) failed", zap.String("hash", tx.ImmutableHash()))
 		}
 	})
 	return nil
 }
 
-func (tw *Twelve) doOnMessage(letter *Letter) {
+func (tw *Twelve) doOnMessage(letter *Letter) *errors.Error {
 	hash := letter.Invariable.S()
+	bExists, err := tw.queue.Exists(hash)
+	if err != nil {
+		gLogger.Error("check tx exists failed", zap.Error(err))
+		return err
+	}
+	if !bExists {
+		gLogger.Info("no such tx local", zap.String("hash", hash), zap.Any("letter", letter))
+		return errors.Sys("no such tx local")
+	}
 	expect, err := gExpectFactory.MustGet(tw.here.ID.S(), hash, letter.Arrow)
 	if err != nil {
 		gLogger.Error("no such expect",
 			zap.String("peerID", tw.here.ID.S()),
 			zap.String("hash", hash),
-			zap.Int32("arrow", int32(letter.Arrow)),
-			zap.String("letter.invariable", hash))
-		return
+			zap.Int32("arrow", int32(letter.Arrow)))
+		return err
 	}
 	go expect.Reply(letter.From.S())
+	return nil
 }
 
-func (tw *Twelve) OnPrepare(letter *Letter) {
-	tw.doOnMessage(letter)
+func (tw *Twelve) OnPrepare(letter *Letter) *errors.Error {
+	return tw.doOnMessage(letter)
 }
 
-func (tw *Twelve) OnCommitted(letter *Letter) {
-	tw.doOnMessage(letter)
+func (tw *Twelve) OnCommitted(letter *Letter) *errors.Error {
+	return tw.doOnMessage(letter)
 }
 
-func (tw *Twelve) OnConfirmed(letter *Letter) {
-	tw.doOnMessage(letter)
+func (tw *Twelve) OnConfirmed(letter *Letter) *errors.Error {
+	return tw.doOnMessage(letter)
 }
 
 func (tw *Twelve) Start() {

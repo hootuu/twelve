@@ -3,6 +3,7 @@ package twelve
 import (
 	"github.com/hootuu/tome/bk/bid"
 	"github.com/hootuu/utils/errors"
+	"go.uber.org/zap"
 	"sync"
 	"time"
 )
@@ -13,9 +14,50 @@ type Job struct {
 	timestamp time.Time
 }
 
+type JobDict struct {
+	dict map[string]*Job
+}
+
+func NewJobDict() *JobDict {
+	return &JobDict{dict: make(map[string]*Job)}
+}
+
+func (jd *JobDict) doHasDone() bool {
+	for _, job := range jd.dict {
+		if job.done {
+			return true
+		}
+	}
+	return false
+}
+
+func (jd *JobDict) doOncePut(letter *Letter) {
+	jd.dict[letter.Signature.Hash] = &Job{
+		letter:    letter,
+		done:      false,
+		timestamp: time.Now(),
+	}
+}
+
+func (jd *JobDict) doRun(runFunc func(letter *Letter) *errors.Error) *errors.Error {
+	for _, job := range jd.dict {
+		if job.done {
+			continue
+		}
+		if err := runFunc(job.letter); err != nil {
+			gLogger.Warn("job.dict.run letter failed, ignore it",
+				zap.String("letter.hash", job.letter.Signature.Hash))
+			continue
+		}
+		job.done = true
+		job.timestamp = time.Now()
+	}
+	return nil
+}
+
 type Line struct {
 	inv       bid.BID
-	arrows    [4]*Job
+	arrows    [4]*JobDict
 	timestamp time.Time
 	lock      sync.Mutex
 }
@@ -23,47 +65,11 @@ type Line struct {
 func NewLine(letter *Letter) *Line {
 	ln := &Line{
 		inv:    letter.Invariable,
-		arrows: [4]*Job{nil, nil, nil, nil},
+		arrows: [4]*JobDict{NewJobDict(), NewJobDict(), NewJobDict(), NewJobDict()},
 	}
 	ln.doSet(letter)
 	return ln
 }
-
-//
-//func (line *Line) IsDone() bool {
-//	line.lock.Lock()
-//	defer line.lock.Unlock()
-//	for i := 0; i < len(line.arrows); i++ {
-//		if line.arrows[i] == nil {
-//			return false
-//		}
-//	}
-//	return true
-//}
-//
-//func (line *Line) IsRequest() bool {
-//	return line.doIs(RequestArrow)
-//}
-//
-//func (line *Line) IsPrepare() bool {
-//	return line.doIs(PrepareArrow)
-//}
-//
-//func (line *Line) IsCommitted() bool {
-//	return line.doIs(CommittedArrow)
-//}
-//
-//func (line *Line) IsConfirmed() bool {
-//	return line.doIs(ConfirmedArrow)
-//}
-//
-//func (line *Line) doIs(arrow Arrow) bool {
-//	idx := line.doGetIdx(arrow)
-//	if idx < 0 {
-//		return false
-//	}
-//	return line.arrows[idx] != nil
-//}
 
 func (line *Line) RunOrRegister(letter *Letter, runFunc func(letter *Letter) *errors.Error) *errors.Error {
 	idx := line.doGetIdx(letter.Arrow)
@@ -73,33 +79,23 @@ func (line *Line) RunOrRegister(letter *Letter, runFunc func(letter *Letter) *er
 	line.lock.Lock()
 	defer line.lock.Unlock()
 	if line.arrows[idx] == nil {
-		line.arrows[idx] = &Job{
-			letter:    letter,
-			done:      false,
-			timestamp: time.Now(),
-		}
-		line.timestamp = time.Now()
+		gLogger.Error("CODE ERROR", zap.Int("idx", idx))
+		return nil
 	}
+	line.arrows[idx].doOncePut(letter)
 	preOk := true
-	for i := 0; i < 4; i++ {
+	for i := 0; i < len(line.arrows); i++ {
 		if !preOk {
 			return nil
 		}
 		if line.arrows[i] == nil {
 			return nil
 		}
-		if line.arrows[i].done {
-			preOk = true
-			continue
-		} else {
-			err := runFunc(line.arrows[i].letter)
-			if err != nil {
-				return err
-			}
-			line.arrows[i].done = true
-			line.arrows[i].timestamp = time.Now()
+		err := line.arrows[i].doRun(runFunc)
+		if err != nil {
+			return err
 		}
-		preOk = line.arrows[i].done
+		preOk = line.arrows[i].doHasDone()
 	}
 	return nil
 }
@@ -111,14 +107,8 @@ func (line *Line) doSet(letter *Letter) {
 	}
 	line.lock.Lock()
 	defer line.lock.Unlock()
-	if line.arrows[idx] == nil {
-		line.arrows[idx] = &Job{
-			letter:    letter,
-			done:      false,
-			timestamp: time.Now(),
-		}
-		line.timestamp = time.Now()
-	}
+	line.arrows[idx].doOncePut(letter)
+
 }
 
 func (line *Line) doGetIdx(arrow Arrow) int {

@@ -1,6 +1,7 @@
 package twelve
 
 import (
+	"github.com/hootuu/tome/nd"
 	"github.com/hootuu/utils/errors"
 	"github.com/hootuu/utils/sys"
 	"go.uber.org/zap"
@@ -45,9 +46,13 @@ func (n *Notifier) On(letter *Letter) *errors.Error {
 	if letter == nil {
 		return errors.Verify("require letter, it is nil")
 	}
-	if letter.From.IsHere() {
-		return nil
+	if sys.RunMode.IsRd() {
+		gLogger.Info("REV LETTER", zap.String("peer", letter.From.S()),
+			zap.String("here", nd.Here().ID.S()))
 	}
+	//if letter.From.IsHere() {
+	//	return nil
+	//}
 	select {
 	case n.buf <- letter:
 		return nil
@@ -97,7 +102,7 @@ func (n *Notifier) Listening() {
 			if err != nil {
 				gLogger.Error("line.RunOrRegister error", zap.Error(err))
 				sys.Error("line.RunOrRegister error", err.Error())
-				n.buf <- letter
+				//n.buf <- letter
 				continue
 			}
 		}

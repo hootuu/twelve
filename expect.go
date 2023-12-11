@@ -140,11 +140,11 @@ func (e *Expect) Waiting(doFunc func() *errors.Error, onFunc func()) bool {
 }
 
 func (e *Expect) Reply(peerID string) {
-	//if sys.RunMode.IsRd() {
-	//	fmt.Println("expect.Reply", zap.String("peerID", peerID),
-	//		zap.String("id", e.ID),
-	//		zap.Int("count", len(e.replier)))
-	//}
+	if sys.RunMode.IsRd() {
+		gLogger.Info("expect.Reply", zap.String("peerID", peerID),
+			zap.String("id", e.ID),
+			zap.Uint32("count", e.counter))
+	}
 	_, ok := e.replier.Load(peerID)
 	if ok {
 		gLogger.Warn("repeated peerID", zap.String("peerID", peerID))
@@ -155,7 +155,7 @@ func (e *Expect) Reply(peerID string) {
 		return
 	}
 	newCounter := atomic.AddUint32(&e.counter, 1)
-	fmt.Println("newCounter==========>>>>>>>>>>>", newCounter)
+	fmt.Println("newCounter==========>>>>>>>>>>>", newCounter, "/", e.Expect)
 	if newCounter == e.Expect {
 		//if _, ok := <-e.done; !ok {
 		//	fmt.Println("通道已关闭=================>>>>>>>>>>>>>>>>>>>")

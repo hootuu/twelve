@@ -21,6 +21,7 @@ type Tx struct {
 	Hash   string
 	State  State
 	Letter *Letter
+	Lock   Lock
 	Pre    string
 	Height int64
 }
@@ -41,6 +42,7 @@ func HeadTx() *Tx {
 		Hash:   HeadTxHash,
 		State:  Confirmed,
 		Letter: nil,
+		Lock:   GenesisLock,
 		Pre:    HeadTxHash,
 		Height: 0,
 	}
@@ -72,10 +74,12 @@ func (tx *Tx) Confirm() {
 }
 
 func (tx *Tx) Nxt(letter *Letter) *Tx {
+	nxtLock := tx.Lock.Nxt(tx.Height+1, letter.Invariable)
 	txM := &Tx{
 		Hash:   letter.Invariable.S(),
 		State:  Committed,
 		Letter: letter,
+		Lock:   nxtLock,
 		Pre:    tx.Hash,
 		Height: tx.Height + 1,
 	}

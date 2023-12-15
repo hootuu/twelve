@@ -2,11 +2,13 @@ package twelve
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/hootuu/tome/bk/bid"
 	"github.com/hootuu/tome/ki"
 	"github.com/hootuu/tome/kt"
 	"github.com/hootuu/tome/nd"
 	"github.com/hootuu/tome/vn"
+	"github.com/hootuu/utils/crypto"
 	"github.com/hootuu/utils/errors"
 )
 
@@ -17,18 +19,56 @@ const (
 type Arrow int32
 
 const (
-	RequestArrow   Arrow = 1
-	PrepareArrow   Arrow = 2
-	CommittedArrow Arrow = 3
-	ConfirmedArrow Arrow = 4
+	RequestArrow    Arrow = 1
+	PrepareArrow    Arrow = 2
+	CommittedArrow  Arrow = 3
+	ConfirmedArrow  Arrow = 4
+	InvariableArrow Arrow = 999999999
 )
+
+func (a Arrow) S() string {
+	str := "?"
+	switch a {
+	case RequestArrow:
+		str = "REQUEST"
+	case PrepareArrow:
+		str = "PREPARE"
+	case CommittedArrow:
+		str = "COMMITTED"
+	case ConfirmedArrow:
+		str = "CONFIRMED"
+	case InvariableArrow:
+		str = "INVARIABLE"
+	}
+	return str
+}
 
 func ArrowVerify(t Arrow) *errors.Error {
 	switch t {
-	case RequestArrow, PrepareArrow, CommittedArrow, ConfirmedArrow:
+	case RequestArrow, PrepareArrow, CommittedArrow, ConfirmedArrow, InvariableArrow:
 		return nil
 	}
 	return errors.Verify("invalid letter.arrow")
+}
+
+type Lock string
+
+const (
+	UnLock Lock = "?"
+)
+
+var GenesisLock = Lock(crypto.SHA256("0:" + bid.GenesisBID.S()))
+
+func (lock Lock) S() string {
+	return string(lock)
+}
+
+func (lock Lock) Nxt(height int64, inv bid.BID) Lock {
+	return Lock(crypto.SHA256(fmt.Sprintf("%s.%d:%s", lock.S(), height, inv.S())))
+}
+
+func (lock Lock) Equals(other Lock) bool {
+	return lock == other
 }
 
 const (
@@ -43,6 +83,7 @@ type Letter struct {
 	Vn         vn.ID         `json:"vn"`
 	Chain      kt.Chain      `json:"c"`
 	Invariable bid.BID       `json:"i"`
+	Lock       Lock          `json:"l"`
 	From       nd.ID         `json:"f"`
 	Signature  *kt.Signature `json:"s"`
 }
@@ -51,6 +92,7 @@ func NewLetter(
 	vnID vn.ID,
 	chain kt.Chain,
 	invID bid.BID,
+	lock Lock,
 	arrow Arrow,
 	from nd.ID,
 ) *Letter {
@@ -61,6 +103,7 @@ func NewLetter(
 		Vn:         vnID,
 		Chain:      chain,
 		Invariable: invID,
+		Lock:       lock,
 		From:       from,
 		Signature:  nil,
 	}

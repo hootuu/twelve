@@ -177,19 +177,37 @@ func (e *Expect) doClose() {
 }
 
 type ExpectFactory struct {
-	db sync.Map
+	db   sync.Map
+	lock sync.Mutex
 }
 
 func NewExpectFactory() *ExpectFactory {
 	return &ExpectFactory{}
 }
 
-func (ef *ExpectFactory) Build(peerID string, hash string, forArrow Arrow, expect int) *Expect {
+func (ef *ExpectFactory) GetOrBuild(peerID string, hash string, forArrow Arrow, expect int) (*Expect, bool, *errors.Error) {
+	ef.lock.Lock()
+	defer ef.lock.Unlock()
 	id := ExpectID(peerID, hash, forArrow)
 	val, ok := ef.db.Load(id)
 	if ok {
-		fmt.Println(peerID, hash, forArrow, expect)
-		sys.Exit(errors.Sys("repeated expect")) //todo
+		if e, ok := val.(*Expect); ok {
+			return e, false, nil
+		}
+		gLogger.Error("ExpectFactory.GetOrBuild: it is not the Expect", zap.String("hash", hash))
+		return nil, false, errors.Sys("Must Be Expect")
+	}
+	e := NewExpect(id, expect)
+	ef.db.Store(id, e)
+	return e, true, nil
+}
+
+func (ef *ExpectFactory) Build(peerID string, hash string, forArrow Arrow, expect int) *Expect {
+	ef.lock.Lock()
+	defer ef.lock.Unlock()
+	id := ExpectID(peerID, hash, forArrow)
+	val, ok := ef.db.Load(id)
+	if ok {
 		if e, ok := val.(*Expect); ok {
 			return e
 		}

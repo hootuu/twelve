@@ -85,7 +85,7 @@ func (tw *Twelve) doPrepare(hash string) *errors.Error {
 	if err != nil {
 		return err
 	}
-	prepareLetter := NewLetter(tw.vnID, tw.chain, tx.Letter.Invariable, PrepareArrow, tw.here.ID)
+	prepareLetter := NewLetter(tw.vnID, tw.chain, tx.Letter.Invariable, tx.Lock, PrepareArrow, tw.here.ID)
 	err = prepareLetter.Sign(tw.here.PRI)
 	if err != nil {
 		return err
@@ -115,7 +115,7 @@ func (tw *Twelve) doCommit(hash string) *errors.Error {
 	if err != nil {
 		return err
 	}
-	committedLetter := NewLetter(tw.vnID, tw.chain, tx.Letter.Invariable, CommittedArrow, tw.here.ID)
+	committedLetter := NewLetter(tw.vnID, tw.chain, tx.Letter.Invariable, tx.Lock, CommittedArrow, tw.here.ID)
 	err = committedLetter.Sign(tw.here.PRI)
 	if err != nil {
 		return err
@@ -146,7 +146,7 @@ func (tw *Twelve) doConfirm(hash string) *errors.Error {
 		return err
 	}
 
-	confirmedLetter := NewLetter(tw.vnID, tw.chain, tx.Letter.Invariable, ConfirmedArrow, tw.here.ID)
+	confirmedLetter := NewLetter(tw.vnID, tw.chain, tx.Letter.Invariable, tx.Lock, ConfirmedArrow, tw.here.ID)
 	err = confirmedLetter.Sign(tw.here.PRI)
 	if err != nil {
 		return err
@@ -170,13 +170,15 @@ func (tw *Twelve) doConfirm(hash string) *errors.Error {
 
 func (tw *Twelve) doOnMessage(letter *Letter) *errors.Error {
 	hash := letter.Invariable.S()
-	bExists, err := tw.queue.Exists(hash)
+	tx, err := tw.queue.MustGet(hash)
 	if err != nil {
-		gLogger.Error("check tx exists failed", zap.Error(err))
+		gLogger.Error("must get tx failed", zap.Error(err))
 		return err
 	}
-	if !bExists {
-		gLogger.Info("no such tx local", zap.String("hash", hash), zap.Any("letter", letter))
+	if !tx.Lock.Equals(letter.Lock) {
+		gLogger.Info("tx lock not matched", zap.String("hash", hash),
+			zap.String("lock", tx.Lock.S()),
+			zap.Any("letter.lock", letter.Lock.S()))
 		return errors.Sys("no such tx local")
 	}
 	expect, err := gExpectFactory.MustGet(tw.here.ID.S(), hash, letter.Arrow)

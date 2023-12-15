@@ -2,6 +2,8 @@ package twelve
 
 import (
 	"fmt"
+	"github.com/hootuu/rock"
+	"github.com/hootuu/tome/bk/bid"
 	"github.com/hootuu/tome/kt"
 	"github.com/hootuu/tome/vn"
 	"github.com/hootuu/utils/errors"
@@ -170,4 +172,14 @@ func (q *Queue) List(lstHash string, limit pagination.Limit) ([]*Tx, string, *er
 	}
 
 	return arr, current, nil
+}
+
+func (q *Queue) doSync(inv bid.BID, lockHash Lock) *errors.Error {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+	if q.immutableTail.Hash == inv.S() {
+		return nil
+	}
+	rock.Get(inv, nil)
+	return nil //nil
 }

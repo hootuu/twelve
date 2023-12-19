@@ -2,13 +2,11 @@ package twelve
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/hootuu/tome/bk/bid"
 	"github.com/hootuu/tome/ki"
 	"github.com/hootuu/tome/kt"
 	"github.com/hootuu/tome/nd"
 	"github.com/hootuu/tome/vn"
-	"github.com/hootuu/utils/crypto"
 	"github.com/hootuu/utils/errors"
 )
 
@@ -51,25 +49,11 @@ func ArrowVerify(t Arrow) *errors.Error {
 	return errors.Verify("invalid letter.arrow")
 }
 
-type Lock string
+type Lock = kt.KID
 
 const (
 	UnLock Lock = "?"
 )
-
-var GenesisLock = Lock(crypto.SHA256("0:" + bid.GenesisBID.S()))
-
-func (lock Lock) S() string {
-	return string(lock)
-}
-
-func (lock Lock) Nxt(height int64, inv bid.BID) Lock {
-	return Lock(crypto.SHA256(fmt.Sprintf("%s.%d:%s", lock.S(), height, inv.S())))
-}
-
-func (lock Lock) Equals(other Lock) bool {
-	return lock == other
-}
 
 const (
 	LetterType    kt.Type = "HOTU.12.LETTER"

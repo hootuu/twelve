@@ -180,6 +180,10 @@ func (q *Queue) doSync(inv bid.BID, lockHash Lock) *errors.Error {
 	if q.immutableTail.Hash == inv.S() {
 		return nil
 	}
-	rock.Get(inv, nil)
+	var knot kt.Knot
+	_, err := rock.Get(inv, &knot)
+	if err != nil {
+		return err
+	}
 	return nil //nil
 }

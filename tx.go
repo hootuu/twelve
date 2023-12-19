@@ -2,6 +2,7 @@ package twelve
 
 import (
 	"encoding/json"
+	"github.com/hootuu/tome/bk/bid"
 	"github.com/hootuu/utils/errors"
 )
 
@@ -42,7 +43,7 @@ func HeadTx() *Tx {
 		Hash:   HeadTxHash,
 		State:  Confirmed,
 		Letter: nil,
-		Lock:   GenesisLock,
+		Lock:   bid.GenesisBID,
 		Pre:    HeadTxHash,
 		Height: 0,
 	}
@@ -74,7 +75,7 @@ func (tx *Tx) Confirm() {
 }
 
 func (tx *Tx) Nxt(letter *Letter) *Tx {
-	nxtLock := tx.Lock.Nxt(tx.Height+1, letter.Invariable)
+	nxtLock := tx.Lock //todo
 	txM := &Tx{
 		Hash:   letter.Invariable.S(),
 		State:  Committed,

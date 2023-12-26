@@ -16,6 +16,7 @@ type IListener interface {
 	OnPrepare(msg *Letter) *errors.Error
 	OnCommitted(msg *Letter) *errors.Error
 	OnConfirmed(msg *Letter) *errors.Error
+	OnInvariable(msg *Letter) *errors.Error
 }
 
 type Notifier struct {
@@ -72,6 +73,16 @@ func (n *Notifier) Listening() {
 			letter := <-n.buf
 			if sys.RunMode.IsRd() {
 				gLogger.Info("Notifier.Listening", zap.Any("letter", letter))
+			}
+			if letter.Arrow == InvariableArrow {
+				sys.Info("========>>>>> Listening.OnInvariable.1....")
+				err := n.listener.OnInvariable(letter)
+				sys.Info("========>>>>> Listening.OnInvariable.2....")
+				if err != nil {
+					gLogger.Error("Listening.OnInvariable error", zap.Error(err))
+					sys.Error("Listening.OnInvariable error", err.Error())
+				}
+				continue
 			}
 			line := n.lf.MustGet(letter)
 			err := line.RunOrRegister(letter, func(letter *Letter) *errors.Error {

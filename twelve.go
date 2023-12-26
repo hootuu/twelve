@@ -205,6 +205,23 @@ func (tw *Twelve) OnConfirmed(letter *Letter) *errors.Error {
 	return tw.doOnMessage(letter)
 }
 
+func (tw *Twelve) OnInvariable(letter *Letter) *errors.Error {
+	expect, isNew, err := gExpectFactory.GetOrBuild(tw.here.ID.S(), letter.Invariable.S(), InvariableArrow, 3)
+	if err != nil {
+		return err
+	}
+	if isNew {
+		go expect.Waiting(func() *errors.Error {
+			return nil
+		}, func() {
+			tw.queue.doRectify(letter.Invariable)
+		})
+	} else {
+		expect.Reply(letter.From.S())
+	}
+	return nil
+}
+
 func (tw *Twelve) Start() {
 	tw.notifier.Listening()
 }

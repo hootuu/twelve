@@ -187,3 +187,7 @@ func (q *Queue) doSync(inv bid.BID, lockHash Lock) *errors.Error {
 	}
 	return nil //nil
 }
+
+func (q *Queue) doRectify(tail bid.BID) *errors.Error {
+	return nil //todo
+}

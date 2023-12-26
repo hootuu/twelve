@@ -2,6 +2,7 @@ package twelve
 
 import (
 	"github.com/hootuu/tome/bk/bid"
+	"github.com/hootuu/tome/kt"
 	"github.com/hootuu/utils/errors"
 	"go.uber.org/zap"
 	"sync"
@@ -15,11 +16,11 @@ type Job struct {
 }
 
 type JobDict struct {
-	dict map[string]*Job
+	dict map[kt.Hash]*Job
 }
 
 func NewJobDict() *JobDict {
-	return &JobDict{dict: make(map[string]*Job)}
+	return &JobDict{dict: make(map[kt.Hash]*Job)}
 }
 
 func (jd *JobDict) doHasDone() bool {
@@ -32,7 +33,7 @@ func (jd *JobDict) doHasDone() bool {
 }
 
 func (jd *JobDict) doOncePut(letter *Letter) {
-	jd.dict[letter.Signature.Hash] = &Job{
+	jd.dict[letter.Signature.Hash()] = &Job{
 		letter:    letter,
 		done:      false,
 		timestamp: time.Now(),
@@ -46,7 +47,7 @@ func (jd *JobDict) doRun(runFunc func(letter *Letter) *errors.Error) *errors.Err
 		}
 		if err := runFunc(job.letter); err != nil {
 			gLogger.Warn("job.dict.run letter failed, ignore it",
-				zap.String("letter.hash", job.letter.Signature.Hash))
+				zap.String("letter.hash", job.letter.Signature.Hash().S()))
 			continue
 		}
 		job.done = true

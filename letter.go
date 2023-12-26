@@ -6,8 +6,8 @@ import (
 	"github.com/hootuu/tome/ki"
 	"github.com/hootuu/tome/kt"
 	"github.com/hootuu/tome/nd"
-	"github.com/hootuu/tome/vn"
 	"github.com/hootuu/utils/errors"
+	"go.uber.org/zap"
 )
 
 const (
@@ -49,6 +49,12 @@ func ArrowVerify(t Arrow) *errors.Error {
 	return errors.Verify("invalid letter.arrow")
 }
 
+type ConsensusPayload struct {
+	Tx         kt.Hash `json:"tx"`
+	Invariable bid.BID `json:"i"`
+	Pre        kt.KID  `json:"pre"`
+}
+
 type Lock = kt.KID
 
 const (
@@ -61,37 +67,105 @@ const (
 )
 
 type Letter struct {
-	Arrow      Arrow         `json:"a"`
-	Type       kt.Type       `json:"t"`
-	Version    kt.Version    `json:"v"`
-	Vn         vn.ID         `json:"vn"`
-	Chain      kt.Chain      `json:"c"`
-	Invariable bid.BID       `json:"i"`
-	Lock       Lock          `json:"l"`
-	From       nd.ID         `json:"f"`
-	Signature  *kt.Signature `json:"s"`
+	Hash      kt.Hash       `json:"h"`
+	Arrow     Arrow         `json:"a"`
+	Type      kt.Type       `json:"t"`
+	Version   kt.Version    `json:"v"`
+	Chain     *kt.Chain     `json:"c"`
+	Payload   []byte        `json:"p"`
+	From      nd.ID         `json:"f"`
+	Signature *kt.Signature `json:"s"`
 }
 
-func NewLetter(
-	vnID vn.ID,
-	chain kt.Chain,
-	invID bid.BID,
-	lock Lock,
-	arrow Arrow,
-	from nd.ID,
-) *Letter {
-	return &Letter{
-		Arrow:      arrow,
-		Type:       LetterType,
-		Version:    LetterVersion,
-		Vn:         vnID,
-		Chain:      chain,
-		Invariable: invID,
-		Lock:       lock,
-		From:       from,
-		Signature:  nil,
+func NewLetter(chain *kt.Chain, arrow Arrow) *Letter {
+	l := &Letter{
+		Arrow:   arrow,
+		Type:    LetterType,
+		Version: LetterVersion,
+		Chain:   chain,
+		From:    nd.Here().ID,
 	}
+	return l
 }
+
+func (l *Letter) WithTx(tx *kt.Tx) *errors.Error {
+	var nErr error
+	l.Payload, nErr = json.Marshal(tx)
+	if nErr != nil {
+		gLogger.Error("WithTx.json.Marshal(tx) Error", zap.Error(nErr))
+		return errors.Sys("WithTx.json.Marshal(tx) Error: " + nErr.Error())
+	}
+	return nil
+}
+
+func (l *Letter) WithConsensus(cp *ConsensusPayload) *errors.Error {
+	var nErr error
+	l.Payload, nErr = json.Marshal(cp)
+	if nErr != nil {
+		gLogger.Error("WithTx.json.Marshal(cp) Error", zap.Error(nErr))
+		return errors.Sys("WithTx.json.Marshal(cp) Error: " + nErr.Error())
+	}
+	return nil
+}
+
+func (l *Letter) Sign(pri ki.PRI) *errors.Error {
+	var err *errors.Error
+	l.Signature = kt.NewSignature()
+	l.Hash, err = l.Signature.Sign(pri, l.doInjectSigning)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (l *Letter) doInjectSigning(builder *kt.Signing) {
+	builder.Add("Chain", l.Chain.S())
+	builder.Add("Arrow", l.Arrow.S())
+	builder.Add("From", l.From.S())
+	builder.Add("Payload", string(l.Payload))
+}
+
+func (l *Letter) GetTx() (*kt.Tx, *errors.Error) {
+	var txM kt.Tx
+	nErr := json.Unmarshal(l.Payload, &txM)
+	if nErr != nil {
+		gLogger.Error("json.Unmarshal(l.Payload, &txM) err", zap.Error(nErr))
+		return nil, errors.Sys("Letter.GetTx Error: " + nErr.Error())
+	}
+	return &txM, nil
+}
+
+func (l *Letter) GetConsensus() (*ConsensusPayload, *errors.Error) {
+	var cpM ConsensusPayload
+	nErr := json.Unmarshal(l.Payload, &cpM)
+	if nErr != nil {
+		gLogger.Error("json.Unmarshal(l.Payload, &cpM) err", zap.Error(nErr))
+		return nil, errors.Sys("Letter.GetConsensus Error: " + nErr.Error())
+	}
+	return &cpM, nil
+}
+
+//
+//func NewLetter(
+//	vnID vn.ID,
+//	chain kt.Chain,
+//	invID bid.BID,
+//	lock Lock,
+//	arrow Arrow,
+//	from nd.ID,
+//) *Letter {
+//	return &Letter{
+//		Arrow:      arrow,
+//		Type:       LetterType,
+//		Version:    LetterVersion,
+//		Vn:         vnID,
+//		Chain:      chain,
+//		Invariable: invID,
+//		Lock:       lock,
+//		From:       from,
+//		Signature:  nil,
+//	}
+//}
 
 func (l *Letter) ToBytes() ([]byte, *errors.Error) {
 	data, nErr := json.Marshal(l)
@@ -101,45 +175,52 @@ func (l *Letter) ToBytes() ([]byte, *errors.Error) {
 	return data, nil
 }
 
-func LetterOfBytes(data []byte) (*Letter, *errors.Error) {
-	var letter Letter
-	nErr := json.Unmarshal(data, &letter)
-	if nErr != nil {
-		return nil, errors.Sys("invalid letter bytes, can not unmarshal: " + nErr.Error())
-	}
-	return &letter, nil
-}
+//
+//func LetterOfBytes(data []byte) (*Letter, *errors.Error) {
+//	var letter Letter
+//	nErr := json.Unmarshal(data, &letter)
+//	if nErr != nil {
+//		return nil, errors.Sys("invalid letter bytes, can not unmarshal: " + nErr.Error())
+//	}
+//	return &letter, nil
+//}
+//
+//func (l *Letter) GetType() kt.Type {
+//	return l.Type
+//}
+//
+//func (l *Letter) GetVersion() kt.Version {
+//	return l.Version
+//}
+//
+//func (l *Letter) GetVN() vn.ID {
+//	return l.Vn
+//}
+//
+//func (l *Letter) GetSignature() *kt.Signature {
+//	return l.Signature
+//}
+//
+//func (l *Letter) SetSignature(signature *kt.Signature) {
+//	l.Signature = signature
+//}
 
-func (l *Letter) GetType() kt.Type {
-	return l.Type
-}
-
-func (l *Letter) GetVersion() kt.Version {
-	return l.Version
-}
-
-func (l *Letter) GetVN() vn.ID {
-	return l.Vn
-}
-
-func (l *Letter) GetSignature() *kt.Signature {
-	return l.Signature
-}
-
-func (l *Letter) SetSignature(signature *kt.Signature) {
-	l.Signature = signature
-}
-
-func (l *Letter) Signing() *kt.Signing {
-	return kt.NewSigning().
-		Add("chain", l.Chain.S()).
-		Add("from", l.From.S())
-}
-
-func (l *Letter) Sign(pri ki.PRI) *errors.Error {
-	return kt.InvariableSign(l, pri)
-}
+//func (l *Letter) Signing() *kt.Signing {
+//	return kt.NewSigning().
+//		Add("chain", l.Chain.S()).
+//		Add("from", l.From.S())
+//}
 
 func (l *Letter) Verify() *errors.Error {
-	return kt.InvariableVerify(l)
+	if l.Signature == nil {
+		return errors.Verify("Require Signature")
+	}
+	hash, err := l.Signature.Verify(l.doInjectSigning)
+	if err != nil {
+		return err
+	}
+	if l.Hash != hash {
+		return errors.Verify("Invalid Letter.Hash")
+	}
+	return nil
 }
